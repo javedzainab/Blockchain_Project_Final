@@ -40,38 +40,55 @@ contract Auction {
     }
 
     // Bid function
-    function placeBid() external payable onlyBeforeEnd {
-        require(msg.sender != owner, "Owner cannot bid.");
-        require(msg.value > 0, "Bid amount must be greater than 0");
-        require(msg.value >= highestBindingBid, "Bidding amount should be greater than previous bid");
-        if (msg.value >= highestBindingBid || highestBindingBid == 0) {
-            // Update highestBid and highestBidder
-            previousHighestBid = highestBindingBid;
-            highestBindingBid = msg.value;
-            highestBidder = msg.sender;
+  // Add a state variable to store addresses with the same value
+// Add a state variable to store addresses with the same value
+address[] private addressesWithSameValueArray;
 
-            // Update bids mapping for the bidder
-            bids[msg.sender] = msg.value;
+// Update the placeBid function
+function placeBid() external payable onlyBeforeEnd {
+    require(msg.sender != owner, "Owner cannot bid.");
+    require(msg.value > 0, "Bid amount must be greater than 0");
 
-            // Increment the number of bids
-            numberOfBids++;
+    if (msg.value >= highestBindingBid) {
+        if (msg.value == highestBindingBid) {
+            // Add the bidder's address to the array
+            addressesWithSameValueArray.push(msg.sender);
         }
+
+        // Update highestBid and highestBidder
+        previousHighestBid = highestBindingBid;
+        highestBindingBid = msg.value;
+        highestBidder = msg.sender;
     }
 
-    // Finalize auction function
-   function finalizeAuction() external onlyOwner onlyAfterEnd {
+    // Update bids mapping for the bidder
+    bids[msg.sender] = msg.value;
+
+    // Increment the number of bids
+    numberOfBids++;
+}
+
+// Add a function to randomly select a winner among bidders with the same value
+function getRandomBidderWithSameValue() internal view returns (address) {
+    if (addressesWithSameValueArray.length > 0) {
+        uint256 randomIndex = uint256(keccak256(abi.encodePacked(blockhash(block.number - 1), msg.sender))) % addressesWithSameValueArray.length;
+        return addressesWithSameValueArray[randomIndex];
+    }
+    
+    return address(0);
+}
+function finalizeAuction() external onlyOwner onlyAfterEnd {
     require(highestBidder != address(0), "No bidders");
 
-
-    // Calculate the maximum allowed increment
     uint256 maxIncrement = ((highestBindingBid - previousHighestBid) / 2);
 
-    // Set the highestBindingBid with the random increment
-   
     highestBindingBid = previousHighestBid + maxIncrement;
 
-    // Transfer the highestBindingBid to the owner
-    payable(owner).transfer(highestBindingBid);
+    for (uint256 i = 0; i < addressesWithSameValueArray.length; i++) {
+        payable(addressesWithSameValueArray[i]).transfer(bids[addressesWithSameValueArray[i]]);
+    }
+
+    payable(highestBidder).transfer(highestBindingBid);
 }
 
     // Withdraw funds function
